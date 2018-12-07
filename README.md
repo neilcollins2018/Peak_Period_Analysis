@@ -136,89 +136,43 @@ C_A <- list.files(path="ADD/FILE/PATH/HERE",
                   pattern="*.csv", full.names = T) %>%
   map_df(function(x) read_plus(x))
 ```
-###
-And repeat
+### Using function to create distance metrics
 
 ```
 df_1 <- Variable_create(df_1, C_A)
 ```
+### Creating Rolling Sums
+This is the part of the script that can be most time consuming. 
+Using `data.table` and `DTkey` led to some improvemnts. 
+`parallel::mclapply` allows use of multiple processor cores instead of a single core which the majority of R uses. 
+The `run_sum_v2` function thorugh `Rcpp` was quicker than any other rollling sum functions trialled. 
 
-And repeat
+The `(1:10)*600` creates the multiple window lengths. Alter here for windows of different lengths.
+Alter `paste0("Period_", 1:10)` to name rolling sum columns differently. 
 
-```
-until finished
-```
+`dplyr` works thorugh resulting dataframe to remove `NA` values with `complete.cases()`, unnecessary columns are removed then values changed to meters per minute through the function created earlier. `dplyr::summarise_at` extracts the peak period data for each window length for each player from each session/match in the dataset. `dplyr::gather` changes the data from wide to long. This allows for easier plotting or further analysis. If exporting to Excel, removing the `gather` and altering the `summary_func` may be easier. 
 
-And repeat
-
-```
-until finished
-```
-
-And repeat
+This step is repeated for each distance metric. 
 
 ```
-until finished
-```
-
-And repeat
-
-```
-until finished
-```
-
-End with an example of getting some data out of the system or using it for a little demo
-
-## Running the tests
-
-Explain how to run the automated tests for this system
-
-### Break down into end to end tests
-
-Explain what these tests test and why
+df_td <- setDT(df_1, key=c("Match","Name"))[
+  ,by=.(Match, Name), paste0("Period_", 1:10)
+  := mclapply((1:10)*600, function(x) run_sum_v2(Dist, x))][]
+df_td %<>%
+  filter(complete.cases(.)) %>%
+  select(-c(3:5)) %>%
+  group_by(Name, Match) %>%
+  mutate_func(.) %>% 
+  dplyr::summarise_at(c(3:12), max) %>%
+  gather("Time_Period", "m.min", -Name, -Match)
 
 ```
-Give an example
-```
+### Create Summary File of all 
 
-### And coding style tests
-
-Explain what these tests test and why
+Binds dataframes for different speed thresholds and creates final dataframe. 
 
 ```
-Give an example
+
+summary_file <- summary_func(summary_file, df_td, df_hs, df_sd)
+
 ```
-
-## Deployment
-
-Add additional notes about how to deploy this on a live system
-
-## Built With
-
-* [Dropwizard](http://www.dropwizard.io/1.0.2/docs/) - The web framework used
-* [Maven](https://maven.apache.org/) - Dependency Management
-* [ROME](https://rometools.github.io/rome/) - Used to generate RSS Feeds
-
-## Contributing
-
-Please read [CONTRIBUTING.md](https://gist.github.com/PurpleBooth/b24679402957c63ec426) for details on our code of conduct, and the process for submitting pull requests to us.
-
-## Versioning
-
-We use [SemVer](http://semver.org/) for versioning. For the versions available, see the [tags on this repository](https://github.com/your/project/tags). 
-
-## Authors
-
-* **Billie Thompson** - *Initial work* - [PurpleBooth](https://github.com/PurpleBooth)
-
-See also the list of [contributors](https://github.com/your/project/contributors) who participated in this project.
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details
-
-## Acknowledgments
-
-* Hat tip to anyone whose code was used
-* Inspiration
-* etc
