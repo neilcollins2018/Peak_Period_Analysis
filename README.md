@@ -143,7 +143,7 @@ df_1 <- Variable_create(df_1, C_A)
 ```
 ### Creating Rolling Sums
 This is the part of the script that can be most time consuming. 
-Using `data.table` and `DTkey` led to some improvemnts. 
+Using `data.table` and `DTkey` led to minor speed improvements. 
 `parallel::mclapply` allows use of multiple processor cores instead of a single core which the majority of R uses. 
 The `run_sum_v2` function thorugh `Rcpp` was quicker than any other rollling sum functions trialled. 
 
