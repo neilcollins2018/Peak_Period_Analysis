@@ -35,7 +35,7 @@ Variable_create2 <- function(newdf, old_df){
 }
 
 ############File Path
-C_A <- list.files(path="/Users/neilcollins/desktop/MinXMin2", 
+C_A <- list.files(path="Add folder path here", 
                   pattern="*.csv", full.names = T) %>%
   map_df(function(x) read_plus(x))
 
