@@ -6,7 +6,6 @@ output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
-source("/Users/neilcollins/desktop/Scripts/GPS Functions.R")
 library(tidyverse)
 library(magrittr)
 library(data.table)
