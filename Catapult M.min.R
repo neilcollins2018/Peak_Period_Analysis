@@ -75,11 +75,11 @@ mutate_func <- function(x){
 }
 
 ##Summarise -------_Alter based on Rolling WIndow Preference
-summary_func <- function(summarydf,td,hs,vhs){
-  summarydf <- cbind(td, hs, vhs)
-  summarydf <- summarydf[,c(1:4, 8,12)]
-  names(summarydf) <- c("Match", "Name", "Time Period(Mins)", "M.Min", "HS M.Min", "VHS M.Min")
-  summarydf %<>%
+summary_func <- function(td,hs,vhs){
+  df <- cbind(td, hs, vhs)
+  df <- df[,c(1:4, 8,12)]
+  names(df) <- c("Match", "Name", "Time Period(Mins)", "M.Min", "HS M.Min", "VHS M.Min")
+  df %<>%
     group_by(Name, Match, `Time Period(Mins)`) %>%
     filter_if(is.numeric, any_vars(.<250)) %>%
     mutate_if(is.numeric, funs(round(.,0)))
