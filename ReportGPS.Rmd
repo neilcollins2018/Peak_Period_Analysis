@@ -6,7 +6,6 @@ output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
-source("/Users/neilcollins/desktop/Scripts/GPS Functions.R")
 library(tidyverse)
 library(magrittr)
 library(data.table)
@@ -17,8 +16,145 @@ library(scales)
 library(kableExtra)
 library(ggplus)
 
+###DTfile load
+read_plus <- function(flnm) {
+  fread(flnm, skip = 8) %>% 
+    mutate(filename=gsub(" .csv", "", basename(flnm))) %>%
+    separate(filename, c('Match', 'z2', 'z3', 'z4', 'z5', 'z6')," ") %>%
+    mutate(Name = paste(z4, z5)) %>%
+    select(c(2,3,13,19))
+}
+
+###Create variables for distance calc in Minute By Minute
+Variable_create2 <- function(old_df){
+  newdf <- data.frame(matrix(NA, nrow = nrow(old_df), ncol = ncol(old_df)+7))
+  newdf <- old_df %>%
+    mutate("SpeedHS" = case_when(Velocity <= 5.5 ~ 0,
+                                 Velocity > 5.5 ~ Velocity),
+           "SpeedSD" = case_when(Velocity <= 7 ~ 0,
+                                 Velocity > 7 ~ Velocity)) %>%
+    group_by(Match, Name) %>%
+    mutate(Time_diff = Seconds-lag(Seconds))%>%
+    mutate(Time_diff = case_when(is.na(Time_diff) ~ 0,
+                                 Time_diff < 0 ~ 0,
+                                 Time_diff > 0.1 ~ 0.1,
+                                 T ~ Time_diff),
+           Dist = Velocity*Time_diff,
+           Dist_HS = SpeedHS*Time_diff,
+           Dist_SD = SpeedSD*Time_diff,
+           one_Min = cut(Seconds, breaks = seq(-1, 10800, by = 60))) %>%
+    ungroup() %>%
+    select(c(3,4, 8:11))
+}
+
+##Summarise
+summary_func <- function(td,hs,vhs){
+  df <- cbind(td, hs, vhs)
+  df <- df[,c(1:4, 8,12)]
+  names(df) <- c("Match", "Name", "Time Period(Mins)", "M.Min", "HS M.Min", "VHS M.Min")
+  df %<>%
+    group_by(Name, Match, `Time Period(Mins)`) %>%
+    filter_if(is.numeric, any_vars(.<250)) %>%
+    mutate_if(is.numeric, funs(round(.,0)))
+}
+
+###Extract peak values
+peak_func<- function(df){
+    group_by(Name, Match) %>%
+    mutate(`Period_2` = `Period_2` /2,
+           `Period_3` = `Period_3`/3,
+           `Period_4` = `Period_4`/4,
+           `Period_5` = `Period_5`/5,
+           `Period_6` = `Period_6`/6,
+           `Period_7` = `Period_7`/7,
+           `Period_8` = `Period_8`/8,
+           `Period_9` = `Period_9`/9,
+           `Period_10` = `Period_10`/10
+    ) %>% 
+    dplyr::summarise_at(c(3:12), max)
+}
+
+###Rolling Sum function (C++)
+cppFunction('
+NumericVector run_sum_v2(NumericVector x, int n) {
+    
+            int sz = x.size();
+            
+            NumericVector res(sz);
+            
+            // sum the values from the beginning of the vector to n 
+            res[n-1] = std::accumulate(x.begin(), x.end()-sz+n, 0.0);
+            
+            // loop through the rest of the vector
+            for(int i = n; i < sz; i++) {
+            res[i] = res[i-1] + x[i] - x[i-n];
+            }
+            
+            // pad the first n-1 elements with NA
+            std::fill(res.begin(), res.end()-sz+n-1, NA_REAL);
+            
+            return res;
+            }
+            ')
+
+
+###Create variables for distance calc in Minute By Minute
+Variable_create2 <- function(newdf, old_df){
+  newdf <- data.frame(matrix(NA, nrow = nrow(old_df), ncol = ncol(old_df)+7))
+  newdf <- old_df %>%
+    mutate("SpeedHS" = case_when(Velocity <= 5.5 ~ 0,
+                                 Velocity > 5.5 ~ Velocity),
+           "SpeedSD" = case_when(Velocity <= 7 ~ 0,
+                                 Velocity > 7 ~ Velocity)) %>%
+    group_by(Match, Name) %>%
+    mutate(Time_diff = Seconds-lag(Seconds))%>%
+    mutate(Time_diff = case_when(is.na(Time_diff) ~ 0,
+                                 Time_diff < 0 ~ 0,
+                                 Time_diff > 0.1 ~ 0.1,
+                                 T ~ Time_diff),
+           Dist = Velocity*Time_diff,
+           Dist_HS = SpeedHS*Time_diff,
+           Dist_SD = SpeedSD*Time_diff,
+           one_Min = cut(Seconds, breaks = seq(-1, 10800, by = 60))) %>%
+  ungroup() %>%
+  select(c(3,4, 8:11))
+}
+
+
+###Dist Per Min/Dist Per 2 Min
+MinByMinfunc <- function(Old_df) {
+  Old_df %>% 
+  group_by(Name, Match, one_Min) %>%
+  dplyr::summarize(Dist=sum(Dist),
+                   HS_Dist=sum(Dist_HS),
+                   Dist_Sprint=sum(Dist_SD)) %>%
+    ungroup() %>%
+    filter(complete.cases(.)) %>%
+    group_by(Name, Match) %>%
+    mutate(Minute = 1,
+           Minute = cumsum(Minute)) %>%
+    select(-3)
+}
+
+##Create Periods in M/Min --------Increase/Decrease Based on Rolling Window Preference 
+mutate_func <- function(x){
+  x %>%
+    mutate(`Period_2` = `Period_2` /2,
+           `Period_3` = `Period_3`/3,
+           `Period_4` = `Period_4`/4,
+           `Period_5` = `Period_5`/5,
+           `Period_6` = `Period_6`/6,
+           `Period_7` = `Period_7`/7,
+           `Period_8` = `Period_8`/8,
+           `Period_9` = `Period_9`/9,
+           `Period_10` = `Period_10`/10
+    )
+}
+
+
+
 ############File Path
-C_A <- list.files(path="/Users/neilcollins/desktop/testfolder 2", 
+C_A <- list.files(path="Add file path here", 
                   pattern="*.csv", full.names = T) %>%
   map_df(function(x) read_plus(x))
 
