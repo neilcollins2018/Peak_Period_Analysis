@@ -1,0 +1,194 @@
+---
+title: "Peak Period & Minute By Minute Profile"
+author: "Author"
+date: "08/12/2018"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+source("/Users/neilcollins/desktop/Scripts/GPS Functions.R")
+library(tidyverse)
+library(magrittr)
+library(data.table)
+library(parallel)
+library(Rcpp)
+library(ggrepel)
+library(scales)
+library(kableExtra)
+library(ggplus)
+
+############File Path
+C_A <- list.files(path="/Users/neilcollins/desktop/testfolder 2", 
+                  pattern="*.csv", full.names = T) %>%
+  map_df(function(x) read_plus(x))
+
+df_1 <- Variable_create2(df_1, C_A)
+
+###Dist Per Min
+Min_by_min <- df_1 %>% 
+  group_by(Name, Match, one_Min) %>%
+  dplyr::summarize(Dist=sum(Dist),
+                   HS_Dist=sum(Dist_HS),
+                   Dist_Sprint=sum(Dist_SD))
+
+###Creating Minute Number col & filtering excessivel high values
+Min_by_min %<>%
+  group_by(Name, Match) %>%
+  mutate(one_Min = 1,
+         one_Min = cumsum(one_Min)) %>%
+  filter_at(vars(4:6), any_vars(.<250)) %>%
+  mutate_at(vars(4:6), funs(round(.,0)))
+
+###Total Distance
+df_td <- setDT(df_1, key=c("Match","Name"))[
+  ,by=.(Match, Name), paste0("Period_", 1:10)
+  := mclapply((1:10)*600, function(x) run_sum_v2(Dist, x))][]
+df_td %<>%
+  filter(complete.cases(.)) %>%
+  select(-c(3:6)) %>%
+  group_by(Name, Match) %>%
+  mutate_func(.) %>% 
+  dplyr::summarise_at(c(3:12), max) %>%
+  gather("Time_Period", "m.min", -Name, -Match)
+
+#######High Speed M.Min --------Alter 1:10 for rolling windows of difference lengths
+df_hs <- setDT(df_1, key=c("Match","Name"))[
+  ,by=.(Match, Name), paste0("Period_", 1:10)
+  := mclapply((1:10)*600, function(x) run_sum_v2(Dist_HS, x))][]
+df_hs %<>%
+  filter(complete.cases(.)) %>%
+  select(-c(3:6)) %>%
+  group_by(Name, Match) %>%
+  mutate_func(.) %>% 
+  dplyr::summarise_at(c(3:12), max) %>%
+  gather("Time_Period", "m.min", -Name, -Match)
+
+#######Very High Speed M.Min --------Alter 1:10 for rolling windows of difference lengths
+df_sd <- setDT(df_1, key=c("Match","Name"))[
+  ,by=.(Match, Name), paste0("Period_", 1:10)
+  := mclapply((1:10)*600, function(x) run_sum_v2(Dist_SD, x))][]
+df_sd %<>%
+  filter(complete.cases(.)) %>%
+  select(-c(3:6)) %>%
+  group_by(Name, Match) %>%
+  mutate_func(.) %>% 
+  dplyr::summarise_at(c(3:12), max) %>%
+  gather("Time_Period", "m.min", -Name, -Match)
+
+summary_file <- summary_func(df_td, df_hs, df_sd)
+
+A <- ggplot(data=Min_by_min, aes(x=factor(one_Min), y=Dist, fill=Dist))+
+  geom_bar(stat = 'identity', width=0.9)+
+  scale_fill_gradient2(low='blue', mid='green', high='red', midpoint = 100,
+                       name='Meters Per Min')+
+  ggtitle("Minute by Minute Breakdown of Distance Covered",
+          subtitle = 'Meters covered per minute across the timeframe the GPS units recorded data')+
+  ylab("Meters Per Min")+
+  xlab("Match Minute")+
+  scale_y_continuous(breaks=seq(0,220,20))+
+  geom_hline(yintercept = 0, alpha=0.6)+
+  geom_label_repel(size=25, aes(label=ifelse(Dist>100, 
+                                             round(Dist,2),''), vjust=-5), label.size = NA) +
+  geom_hline(aes(yintercept= 100), colour= 'blue', alpha=0.6)+
+  theme_minimal()+
+  theme(
+    axis.text.y = element_text(colour="grey20",size=80,angle=0,hjust=1,vjust=0,face="plain"),  
+    axis.text.x = element_text(colour="grey20",size=60,angle=90,hjust=.5,vjust=.5,face="plain"),
+    axis.title.x = element_text(colour="black",size=70,angle=0,hjust=.5,vjust=0,face="plain"),
+    axis.title.y = element_text(colour="black",size=70,angle=90,hjust=.5,vjust=.5,face="plain"),
+    legend.text = element_text(size = 100),
+    strip.text = element_text(size = 100),
+    legend.key.width = unit(15, 'line'),
+    legend.spacing.x = unit(20, 'cm'),
+    legend.title = element_text(size=90),
+    legend.title.align = 0.5) 
+
+```
+## Minute By Minute Overview
+
+```{r warning=FALSE, echo=FALSE, message=FALSE,  fig.height = 110, fig.width = 80, fig.align = "center"}
+ggplot(Min_by_min, aes(factor(one_Min), Dist, fill=Dist))+
+  geom_bar(stat = 'identity') +
+  facet_grid(Name~.)+
+    scale_fill_gradientn(colours = c("#FFFFFC","#FF9999", "#FF6666", "#FF7F50","#990000", "#800000"),
+                                            space = "Lab",
+                                            guide = "legend",
+                                            values = rescale(c(-1, 10, 60, 90, 120, 180),
+                                                             from = c(0, 180)),
+                                            labels = c("0", "10", "60", "90", "120", "180"),
+                                            breaks = c(-1, 10, 60, 90, 120, 180),
+                                            limits = c(-1,200))+
+  labs(title="Minute by Minute Breakdown of All PLayers", subtitle="Separated By Quarters", x="Match Minute", y="Player Name")+
+  theme(
+    panel.spacing = unit(8, "lines"),
+    strip.text.x = element_text(size = 100),
+    strip.text.y = element_text(size = 100, angle=0),
+    axis.text = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_blank(),
+    axis.title.x = element_text(colour="grey20",size=60,hjust=.5,vjust=.5,face="plain"),
+    axis.title.y = element_text(colour="grey20",size=60,hjust=.5,vjust=.5,face="plain")
+  )
+
+
+```
+
+\pagebreak
+
+```{r , warning=F, echo=F, results='asis'}
+
+Dist_summ <- summary_file[,c(1:4)]
+HS_summ <- summary_file[,c(1:3, 5)]
+VHS_summ <- summary_file[,c(1:3, 6)]
+
+Dist_summ %<>%
+  spread(`Time Period(Mins)`, M.Min)
+HS_summ %<>%
+  spread(`Time Period(Mins)`, `HS M.Min`)
+VHS_summ %<>%
+  spread(`Time Period(Mins)`, `VHS M.Min`)
+
+
+names <- c("Name", "Opposition", "One Min Max", "Two Min Max", "Three Min Max", "Four Min Max", "Five Min Max","Six Min Max","Seven Min Max", "Eight Min Max","Nine Min Max", "Ten Min Max")
+
+colnames(Dist_summ) <- names
+colnames(HS_summ) <-names
+colnames(VHS_summ) <- names
+
+Dist_summ %>%
+  kable(caption = 'Peak Period Data (M/Min)', escape = F, booktabs=T, linesep="  ") %>%
+  kable_styling(latex_options = c('striped', 'repeat_header', "scale_down"), full_width = T) %>%
+  column_spec(1, width = "10em") %>%
+    column_spec(2, width = "8em")
+```
+\clearpage
+
+```{r , warning=F, echo=F, results='asis'}
+HS_summ %>%
+  kable(caption = 'Peak Period Data (HSM/Min)', escape = F, booktabs=T, linesep="  ") %>%
+  kable_styling(latex_options = c('striped', 'repeat_header', "scale_down"), full_width = T) %>%
+  column_spec(1, width = "10em") %>%
+      column_spec(2, width = "8em")
+```
+\clearpage
+
+```{r , warning=F, echo=F, results='asis'}
+VHS_summ %>%
+  kable(caption = 'Peak Period Data VHS(M/Min)', escape = F, booktabs=T, linesep="  ") %>%
+  kable_styling(latex_options = c('striped', 'repeat_header', "scale_down"), full_width = T) %>%
+  column_spec(1, width = "10em") %>%
+      column_spec(2, width = "8em")
+
+```
+
+\clearpage
+
+# Individual Player Graphs
+```{r warning=FALSE, echo=FALSE, message=FALSE,  fig.height = 110, fig.width = 100, fig.align = "center"}
+###Prop Plots
+facet_multiple(plot = A, facets = 'Name', nrow = 5, ncol = 1)
+
+
+```
+
+
