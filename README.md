@@ -1,7 +1,9 @@
 # Catapult Data Analysis
 R-Script for peak period extraction from Catapult GPS files and producing a minute by minute breakdown, designed for large file number and fast analysis 
 
-Note there will be discrepancies between the peak period data and the minute by minute data due to aggregating the data by minutes. i.e. the peak period data will often show higher values than any single minute within the minute y minute breakdown
+Note there will be discrepancies between the peak period data and the minute by minute data due to aggregating the data by minutes. i.e. the peak period data will often show higher values than any single minute within the minute by minute breakdown
+
+RMarkdown report added for session report highlighting peak period and minute by minute data. Sample PDF included
 
 ## Prerequisites
 
