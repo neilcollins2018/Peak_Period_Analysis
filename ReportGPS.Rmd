@@ -22,6 +22,9 @@ C_A <- list.files(path="/Users/neilcollins/desktop/testfolder 2",
                   pattern="*.csv", full.names = T) %>%
   map_df(function(x) read_plus(x))
 
+C_A$Match <- match(C_A$Match, sample(unique(C_A$Match)))
+C_A$Name <- match(C_A$Name, sample(unique(C_A$Name)))
+
 df_1 <- Variable_create2(df_1, C_A)
 
 ###Dist Per Min
