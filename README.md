@@ -1,5 +1,5 @@
-# Catapult_Peak_Period_Extraction
-R-Script for peak period extraction from Catapult GPS files, designed for large file number and fast analysis 
+# Catapult Data Analysis
+R-Script for peak period extraction from Catapult GPS files and producing a minute by minute breakdown, designed for large file number and fast analysis 
 
 ## Prerequisites
 
@@ -41,6 +41,8 @@ Distances per measurement are calculated using Velocity*Time=Distance
 
 Any unnecessary columns are removed 
 
+Acceleration script has slight difference where the absolute values are found
+
 ```
 
 Variable_create <- function(newdf, old_df){
@@ -67,6 +69,8 @@ Variable_create <- function(newdf, old_df){
 ### Rolling Sum Function
 Rolling sum function created through C++ and the `Rcpp` package
 This method led to considerable speed improvements over other methods
+
+Acceleration script has very rollinf average function
 
 ```
 cppFunction('
@@ -115,6 +119,8 @@ mutate_func <- function(x){
 Combines the dataframes for each speed threshold through `cbind`, renames and then carried out a quick filter for any irregular values.
 This filtering will depend on your sport, here it is set to filter out any values over 250m/min.
 It then rounds to zero decimal places, again this can be altered if perferred
+
+Acceleration script also includes acceleration here. 
 
 ```
 summary_func <- function(summarydf,td,hs,vhs){
