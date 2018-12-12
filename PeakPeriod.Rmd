@@ -1,0 +1,141 @@
+---
+title: "Peak Period Analysis and Extraction -- Statsports"
+output:
+  flexdashboard::flex_dashboard:
+    in_header: cssloaders_in_header.html
+    includes: null
+    orientation: columns
+    vertical_layout: fill
+resource_files:
+- GPS Functions_stats.R
+runtime: shiny
+header-includes: \usepackage{color}
+---
+<style>                     
+.navbar {
+  background-color:blue;
+  border-color:black;
+}
+.navbar-brand {
+color:black!important;
+}
+</style>                    
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(magrittr)
+library(data.table)
+library(parallel)
+library(Rcpp)
+library(ggrepel)
+library(scales)
+library(kableExtra)
+library(ggplus)
+library(flexdashboard)
+library(shiny)
+library(DT)
+library(shinycssloaders)
+
+source("GPS Functions_stats.R")
+
+###Dist Per Min/Dist Per 2 Min
+MinByMinfunc <- function(Old_df) {
+  Old_df %>% 
+  group_by(`Session Id`, `Player Display Name`, one_Min) %>%
+  dplyr::summarize(Dist=sum(Dist),
+                   HS_Dist=sum(Dist_HS),
+                   Dist_Sprint=sum(Dist_SD)) %>%
+    ungroup() %>%
+    filter(complete.cases(.)) %>%
+  group_by(`Session Id`, `Player Display Name`) %>%
+    mutate(Minute = 1,
+           Minute = cumsum(Minute))
+}
+
+```
+
+
+```{r input, echo = FALSE}
+options(shiny.maxRequestSize=3000*1024^2)
+
+fileInput("csvs", "Choose CSV File -- Allow Time For Data Upload. Download Analysed Data Before Uploading Additional",
+          multiple = F,
+          accept = c("text/csv",
+                     "text/comma-separated-values,text/plain",
+                     ".csv"))
+renderUI({
+  downloadButton("downloadFile", "Download")
+})
+```
+
+
+Column
+-----------------------------------------------------------------------
+Peak Period Data - Please Allow Time For Analysis Once Data Uploaded
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+dataset<-reactive({
+  data <- rbindlist(lapply(input$csvs$datapath, read_plus),
+                    use.names = TRUE, fill = TRUE)
+  data <- Variable_create(df_1, data)
+  data2 <- data
+
+  ###Total Distance
+  df_td <- setDT(data, key=c("Session Id","Player Display Name"))[
+    ,by=.(`Session Id`, `Player Display Name`), paste0("Period_", 1:10)
+    := mclapply((1:10)*600, function(x) run_sum_v2(Dist, x))][]
+  df_td %<>%
+    filter(complete.cases(.)) %>%
+    select(-c(3:6)) %>%
+    group_by(`Session Id`, `Player Display Name`) %>%
+    mutate_func(.) %>%
+    dplyr::summarise_at(c(3:12), max) %>%
+    gather("Time_Period", "m.min", -`Player Display Name`, -`Session Id`)
+
+  ###Total Distance
+  df_hs <- setDT(data, key=c("Session Id","Player Display Name"))[
+    ,by=.(`Session Id`, `Player Display Name`), paste0("Period_", 1:10)
+    := mclapply((1:10)*600, function(x) run_sum_v2(Dist_HS, x))][]
+  df_hs %<>%
+    filter(complete.cases(.)) %>%
+    select(-c(3:6)) %>%
+    group_by(`Session Id`, `Player Display Name`) %>%
+    mutate_func(.) %>%
+    dplyr::summarise_at(c(3:12), max) %>%
+    gather("Time_Period", "m.min", -`Player Display Name`, -`Session Id`)
+  
+  ###Total Distance
+  df_sd <- setDT(data, key=c("Session Id","Player Display Name"))[
+    ,by=.(`Session Id`, `Player Display Name`), paste0("Period_", 1:10)
+    := mclapply((1:10)*600, function(x) run_sum_v2(Dist_SD, x))][]
+  df_sd %<>%
+    filter(complete.cases(.)) %>%
+    select(-c(3:6)) %>%
+    group_by(`Session Id`, `Player Display Name`) %>%
+    mutate_func(.) %>%
+    dplyr::summarise_at(c(3:12), max) %>%
+    gather("Time_Period", "m.min", -`Player Display Name`, -`Session Id`)
+  
+  data <- summary_func(df_td, df_hs, df_sd)
+  data
+  })
+
+
+renderDataTable({
+  req(input$csvs)
+  options(shiny.error = function() {
+    stop("Waiting For Data")
+  })
+  datatable(if (is.null(dataset())) return("Waiting For Data")
+            else
+              dataset()
+            )
+  }) 
+
+output$downloadFile <- downloadHandler(
+  filename = paste0("PeakPeriodData-", Sys.Date(), ".csv"),
+  content = function(file) {
+    write.csv(dataset(), file,
+              row.names = FALSE)
+  })
+
+```
