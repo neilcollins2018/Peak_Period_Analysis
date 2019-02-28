@@ -74,7 +74,7 @@ Variable_create <- function(newdf, old_df){
 Rolling sum function created through C++ and the `Rcpp` package
 This method led to considerable speed improvements over other methods
 
-Acceleration script has very rollinf average function
+Acceleration script has a rolling average function
 
 ```
 cppFunction('
