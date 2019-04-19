@@ -6,11 +6,18 @@ library(Rcpp)
 
 ###file load --------Alter from mutate for filetypes other than Catapult
 read_plus <- function(flnm) {
-  fread(flnm, skip = 8) %>%
-    mutate(filename=gsub(" .csv", "", basename(flnm))) %>%
-    separate(filename, c('Match', 'z2', 'z3', 'z4', 'z5', 'z6')," ") %>%
-    mutate(Name = paste(z4, z5)) %>%
-    select(c(2:4,13,19))
+  data.table::fread(flnm, skip = 8) %>%
+    dplyr::mutate(filename=gsub(" .csv", "", basename(flnm))) %>%
+    tidyr::separate(filename, c('Match', 'z2', 'z3', 'z4', 'z5', 'z6')," ") %>%
+    dplyr::mutate(Name = paste(z4, z5)) %>%
+    dplyr::select(c(2:4,13,19))
+}
+
+###Read list of catapult files
+list_catapult_csv <- function(path = ".", regexp = "[.]csv$", 
+                              ignore.case = TRUE, invert = FALSE, ...){
+  tor::list_any(path, read_plus, regexp = regexp, ignore.case = ignore.case, 
+                invert = invert, ...)
 }
 
 ###Create variables for distance calc --- Alter speed thresholds for your preference
@@ -113,9 +120,8 @@ summary_func <- function(td,hs,vhs, Acc){
 }
 
 ############File Path
-C_A <- list.files(path="AddFolderPathHere", 
-                  pattern="*.csv", full.names = T) %>%
-  map_df(function(x) read_plus(x))
+C_A <- list_catapult_csv(path="MinXMin2") %>%
+                            bind_rows(.)
 
 ###########Create Necessary metrics for distances 
 df_1 <- Variable_create(df_1, C_A)
@@ -129,7 +135,7 @@ df_td %<>%
   select(-c(3:6)) %>%
   group_by(Name, Match) %>%
   mutate_func(.) %>% 
-  dplyr::summarise_at(c(3:12), max) %>%
+  dplyr::summarise_if(is.numeric, max) %>%
   gather("Time_Period", "m.min", -Name, -Match)
 
 #######High Speed M.Min --------Alter 1:10 for rolling windows of difference lengths
@@ -141,7 +147,7 @@ df_hs %<>%
   select(-c(3:6)) %>%
   group_by(Name, Match) %>%
   mutate_func(.) %>% 
-  dplyr::summarise_at(c(3:12), max) %>%
+  dplyr::summarise_if(is.numeric, max) %>%
   gather("Time_Period", "m.min", -Name, -Match)
 
 #######Very High Speed M.Min --------Alter 1:10 for rolling windows of difference lengths
@@ -153,7 +159,7 @@ df_sd %<>%
   select(-c(3:6)) %>%
   group_by(Name, Match) %>%
   mutate_func(.) %>% 
-  dplyr::summarise_at(c(3:12), max) %>%
+  dplyr::summarise_if(is.numeric, max) %>%
   gather("Time_Period", "m.min", -Name, -Match)
 
 #######Average Acceleration --------Alter 1:10 for rolling windows of difference lengths
@@ -164,7 +170,7 @@ df_Acc %<>%
   filter(complete.cases(.)) %>%
   select(-c(3:6)) %>%
   group_by(Name, Match) %>%
-  dplyr::summarise_at(c(3:12), max) %>%
+   dplyr::summarise_if(is.numeric, max) %>%
   gather("Time_Period", "Avg Accel", -Name, -Match)
 
 
